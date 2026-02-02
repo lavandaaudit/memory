@@ -430,26 +430,14 @@ function renderResults(date, nasa, photo, video, news, atmosphere) {
         };
 
         v.onended = () => {
-            console.log("Video ended, advancing...");
-            randomBtn.click();
-        };
-
-        v.onerror = () => {
-            console.warn("Video error, skipping...");
-            randomBtn.click();
+            console.log("Video finished.");
         };
 
         videoMedia.appendChild(v);
-        // We use a very long fallback (10 minutes) instead of the duration
-        // because we want onended to be the primary driver.
-        scheduleNextMemory(600);
     } else if (video.id) {
         videoMedia.innerHTML = `<iframe id="activeIframe" src="https://archive.org/embed/${video.id}&autoplay=1&mute=0" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
-        // For iframes we can't detect onended, so we add a 30s buffer to the reported duration
-        scheduleNextMemory((video.duration || 60) + 30);
     } else {
         videoMedia.innerHTML = `<img src="https://images.unsplash.com/photo-1485846234645-a62644f84728?q=80&w=1000">`;
-        scheduleNextMemory(20);
     }
 
     document.getElementById('videoDesc').textContent = video.title;
