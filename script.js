@@ -2,6 +2,7 @@ const daySelect = document.getElementById('daySelect');
 const monthSelect = document.getElementById('monthSelect');
 const yearSelect = document.getElementById('yearSelect');
 const exploreBtn = document.getElementById('exploreBtn');
+const randomBtn = document.getElementById('randomBtn');
 const resultContainer = document.getElementById('resultContainer');
 const loader = document.getElementById('loader');
 
@@ -126,9 +127,19 @@ function initSelectors() {
         const val = i.toString().padStart(2, '0');
         monthSelect.add(new Option(val, val));
     }
-    for (let i = 2024; i >= 1900; i--) {
+    for (let i = 2026; i >= 1900; i--) {
         yearSelect.add(new Option(i, i.toString()));
     }
+}
+
+function setRandomDate() {
+    const days = daySelect.options.length;
+    const months = monthSelect.options.length;
+    const years = yearSelect.options.length;
+    
+    daySelect.selectedIndex = Math.floor(Math.random() * days);
+    monthSelect.selectedIndex = Math.floor(Math.random() * months);
+    yearSelect.selectedIndex = Math.floor(Math.random() * years);
 }
 
 initStars();
@@ -136,6 +147,15 @@ animateStars();
 initSelectors();
 initPlanet();
 animatePlanet();
+
+// Trigger random on start
+setRandomDate();
+exploreBtn.click();
+
+randomBtn.onclick = () => {
+    setRandomDate();
+    exploreBtn.click();
+};
 
 window.onresize = () => {
     initStars();
@@ -204,8 +224,9 @@ async function fetchArchiveNews(date) {
     try {
         const response = await fetch(`https://archive.org/advancedsearch.php?q=date:${date} AND subject:(news OR highlights)&output=json&limit=3`);
         const data = await response.json();
-        return data.response.docs.map(doc => doc.title);
-    } catch (e) { return ["Інформаційні канали недоступні.", "Архів новин не знайдено."]; }
+        const docs = data.response.docs;
+        return docs.length > 0 ? docs.map(doc => doc.title) : [];
+    } catch (e) { return []; }
 }
 
 async function generateAtmosphereSummary(date) {
@@ -228,7 +249,8 @@ function renderResults(date, nasa, photo, video, news, atmosphere) {
 
     const videoMedia = document.getElementById('videoMedia');
     if (video.id) {
-        videoMedia.innerHTML = `<iframe src="https://archive.org/embed/${video.id}" width="100%" height="100%" frameborder="0"></iframe>`;
+        // Adding autoplay and looping parameters for IA embed
+        videoMedia.innerHTML = `<iframe src="https://archive.org/embed/${video.id}&autoplay=1&loop=1&playlist=${video.id}" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
     } else {
         videoMedia.innerHTML = `<img src="https://images.unsplash.com/photo-1485846234645-a62644f84728?q=80&w=1000">`;
     }
@@ -239,7 +261,57 @@ function renderResults(date, nasa, photo, video, news, atmosphere) {
     document.getElementById('archiveDesc').textContent = photo.title;
 
     const newsArchive = document.getElementById('newsArchive');
-    newsArchive.innerHTML = news.map(n => `<div class="news-item">${n}</div>`).join('');
+    if (news.length > 0) {
+        newsArchive.innerHTML = news.map(n => `<div class="news-item">${n}</div>`).join('');
+    } else {
+        newsArchive.innerHTML = `
+            <canvas id="newsSpaceCanvas" class="news-space-canvas"></canvas>
+            <div class="news-item" style="border:none; text-align:center; padding-top:20px; opacity:0.7;">
+                МЕРЕЖЕВА ТИША: ПОДІЙ НЕ ЗНАЙДЕНО...<br>ПЕРЕХІД У ГЛИБОКИЙ КОСМОС
+            </div>
+        `;
+        initNewsSpaceAnimation();
+    }
 
     document.getElementById('spaceDesc').textContent = nasa.title + " | Спектральний аналіз епохи завершено.";
+}
+
+let newsAnimId = null;
+function initNewsSpaceAnimation() {
+    if (newsAnimId) cancelAnimationFrame(newsAnimId);
+    const nCanvas = document.getElementById('newsSpaceCanvas');
+    if (!nCanvas) return;
+    const nCtx = nCanvas.getContext('2d');
+    const rect = nCanvas.parentElement.getBoundingClientRect();
+    nCanvas.width = rect.width;
+    nCanvas.height = rect.height;
+    
+    const dots = [];
+    for(let i=0; i<50; i++) {
+        dots.push({
+            x: Math.random() * nCanvas.width,
+            y: Math.random() * nCanvas.height,
+            z: Math.random() * nCanvas.width,
+            s: Math.random() * 2
+        });
+    }
+
+    function anim() {
+        nCtx.fillStyle = 'black';
+        nCtx.fillRect(0, 0, nCanvas.width, nCanvas.height);
+        nCtx.fillStyle = 'white';
+        dots.forEach(d => {
+            d.z -= 2;
+            if (d.z <= 0) d.z = nCanvas.width;
+            const k = 128 / d.z;
+            const px = d.x * k + nCanvas.width/2;
+            const py = d.y * k + nCanvas.height/2;
+            const size = (1 - d.z / nCanvas.width) * 3;
+            nCtx.beginPath();
+            nCtx.arc(px % nCanvas.width, py % nCanvas.height, size, 0, Math.PI*2);
+            nCtx.fill();
+        });
+        newsAnimId = requestAnimationFrame(anim);
+    }
+    anim();
 }
