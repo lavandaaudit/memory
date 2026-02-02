@@ -6,6 +6,8 @@ const randomBtn = document.getElementById('randomBtn');
 const resultContainer = document.getElementById('resultContainer');
 const loader = document.getElementById('loader');
 
+let autoAdvanceTimer = null;
+
 // Global Canvas (Background Stars)
 const canvas = document.getElementById('starsCanvas');
 const ctx = canvas.getContext('2d');
@@ -136,7 +138,7 @@ function setRandomDate() {
     const days = daySelect.options.length;
     const months = monthSelect.options.length;
     const years = yearSelect.options.length;
-    
+
     daySelect.selectedIndex = Math.floor(Math.random() * days);
     monthSelect.selectedIndex = Math.floor(Math.random() * months);
     yearSelect.selectedIndex = Math.floor(Math.random() * years);
@@ -216,8 +218,41 @@ async function fetchArchiveVideo(date) {
         const response = await fetch(`https://archive.org/advancedsearch.php?q=date:${date} AND mediatype:movies&output=json&limit=1`);
         const data = await response.json();
         const item = data.response.docs[0];
-        return { title: item.title, id: item.identifier };
-    } catch (e) { return { title: "Відео-хроніка відсутня", id: null }; }
+        if (!item) return { title: "Відео-хроніка відсутня", id: null, duration: 0 };
+
+        try {
+            const metaRes = await fetch(`https://archive.org/metadata/${item.identifier}`);
+            const metaData = await metaRes.json();
+            let duration = 0;
+            if (metaData.metadata.duration) {
+                duration = parseDuration(metaData.metadata.duration);
+            } else if (metaData.files) {
+                const videoFile = metaData.files.find(f => f.format === 'MPEG4' || f.format === 'h.264');
+                if (videoFile && videoFile.duration) duration = parseFloat(videoFile.duration);
+            }
+            return { title: item.title, id: item.identifier, duration: duration || 45 };
+        } catch (e) {
+            return { title: item.title, id: item.identifier, duration: 45 };
+        }
+    } catch (e) { return { title: "Відео-хроніка відсутня", id: null, duration: 0 }; }
+}
+
+function parseDuration(dur) {
+    if (typeof dur === 'number') return dur;
+    if (dur.includes(':')) {
+        const parts = dur.split(':').reverse();
+        return parseInt(parts[0]) + (parseInt(parts[1]) || 0) * 60 + (parseInt(parts[2]) || 0) * 3600;
+    }
+    return parseFloat(dur) || 0;
+}
+
+function scheduleNextMemory(seconds) {
+    if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
+    const delay = Math.max(10, Math.min(seconds, 300));
+    console.log(`NEXT CLUSTER IN: ${delay}s`);
+    autoAdvanceTimer = setTimeout(() => {
+        randomBtn.click();
+    }, delay * 1000);
 }
 
 async function fetchArchiveNews(date) {
@@ -249,10 +284,11 @@ function renderResults(date, nasa, photo, video, news, atmosphere) {
 
     const videoMedia = document.getElementById('videoMedia');
     if (video.id) {
-        // Adding autoplay and looping parameters for IA embed
-        videoMedia.innerHTML = `<iframe src="https://archive.org/embed/${video.id}&autoplay=1&loop=1&playlist=${video.id}" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+        videoMedia.innerHTML = `<iframe src="https://archive.org/embed/${video.id}&autoplay=1" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+        scheduleNextMemory(video.duration + 5);
     } else {
         videoMedia.innerHTML = `<img src="https://images.unsplash.com/photo-1485846234645-a62644f84728?q=80&w=1000">`;
+        scheduleNextMemory(20);
     }
     document.getElementById('videoDesc').textContent = video.title;
 
@@ -285,9 +321,9 @@ function initNewsSpaceAnimation() {
     const rect = nCanvas.parentElement.getBoundingClientRect();
     nCanvas.width = rect.width;
     nCanvas.height = rect.height;
-    
+
     const dots = [];
-    for(let i=0; i<50; i++) {
+    for (let i = 0; i < 50; i++) {
         dots.push({
             x: Math.random() * nCanvas.width,
             y: Math.random() * nCanvas.height,
@@ -304,11 +340,11 @@ function initNewsSpaceAnimation() {
             d.z -= 2;
             if (d.z <= 0) d.z = nCanvas.width;
             const k = 128 / d.z;
-            const px = d.x * k + nCanvas.width/2;
-            const py = d.y * k + nCanvas.height/2;
+            const px = d.x * k + nCanvas.width / 2;
+            const py = d.y * k + nCanvas.height / 2;
             const size = (1 - d.z / nCanvas.width) * 3;
             nCtx.beginPath();
-            nCtx.arc(px % nCanvas.width, py % nCanvas.height, size, 0, Math.PI*2);
+            nCtx.arc(px % nCanvas.width, py % nCanvas.height, size, 0, Math.PI * 2);
             nCtx.fill();
         });
         newsAnimId = requestAnimationFrame(anim);
