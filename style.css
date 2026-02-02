@@ -116,6 +116,11 @@ select {
     cursor: pointer;
 }
 
+.button-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
 .fetch-btn {
     background: var(--acc-cyan);
     color: black;
@@ -126,6 +131,12 @@ select {
     text-transform: uppercase;
     cursor: pointer;
     transition: all 0.3s;
+}
+
+.fetch-btn.secondary {
+    background: transparent;
+    color: var(--acc-cyan);
+    border: 1px solid var(--acc-cyan);
 }
 
 .fetch-btn:hover {
@@ -202,6 +213,18 @@ select {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    position: relative;
+    min-height: 100px;
+}
+
+.news-space-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    opacity: 0.5;
 }
 
 .news-item {
@@ -209,6 +232,8 @@ select {
     color: #bbb;
     border-left: 1px solid var(--acc-purple);
     padding-left: 0.5rem;
+    position: relative;
+    z-index: 1;
 }
 
 .control-panel {
