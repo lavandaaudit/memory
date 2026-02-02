@@ -150,10 +150,6 @@ initSelectors();
 initPlanet();
 animatePlanet();
 
-// Trigger random on start
-setRandomDate();
-exploreBtn.click();
-
 randomBtn.onclick = () => {
     setRandomDate();
     exploreBtn.click();
@@ -351,3 +347,7 @@ function initNewsSpaceAnimation() {
     }
     anim();
 }
+
+// Final startup trigger - ensuring handlers are assigned
+setRandomDate();
+exploreBtn.click();
