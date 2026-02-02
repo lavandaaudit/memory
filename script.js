@@ -66,12 +66,12 @@ function initAudio() {
     delayNode.connect(reverbGain);
     reverbGain.connect(masterGain);
 
-    // Drone
+    // Drone (Set to 0 by default as per request)
     droneOsc = audioCtx.createOscillator();
     droneOsc.type = 'sawtooth';
     droneOsc.frequency.value = 55;
     droneGain = audioCtx.createGain();
-    droneGain.gain.value = 0.1;
+    droneGain.gain.value = 0;
 
     const droneLowpass = audioCtx.createBiquadFilter();
     droneLowpass.type = 'lowpass';
@@ -268,12 +268,27 @@ function initSelectors() {
     for (let i = 2026; i >= 1900; i--) {
         yearSelect.add(new Option(i, i.toString()));
     }
+    yearSelect.value = "1995";
 }
 
 function setRandomDate() {
-    daySelect.selectedIndex = Math.floor(Math.random() * 31);
-    monthSelect.selectedIndex = Math.floor(Math.random() * 12);
-    yearSelect.selectedIndex = Math.floor(Math.random() * (2026 - 1900));
+    const minYear = 1950;
+    const maxYear = 2025;
+
+    // Generate valid random date using Date object to handle month lengths automatically
+    const startTs = new Date(minYear, 0, 1).getTime();
+    const endTs = new Date(maxYear, 11, 31).getTime();
+    const randomTs = startTs + Math.random() * (endTs - startTs);
+    const date = new Date(randomTs);
+
+    const y = date.getFullYear().toString();
+    const m = (date.getMonth() + 1).toString().padStart(2, '0');
+    const d = date.getDate().toString().padStart(2, '0');
+
+    // Update selectors using values
+    if (yearSelect.querySelector(`option[value="${y}"]`)) yearSelect.value = y;
+    monthSelect.value = m;
+    daySelect.value = d;
 }
 
 // Initialization flow
@@ -283,19 +298,16 @@ initSelectors();
 initPlanet();
 animatePlanet();
 
-startBtn.onclick = () => {
-    initAudio();
-    startOverlay.style.opacity = '0';
-    setTimeout(() => {
-        startOverlay.classList.add('hidden');
-    }, 1000);
-
-    // Start first load with a slight delay for audio stability
+// Automatic startup as soon as everything is ready
+window.addEventListener('load', () => {
+    // Start first load with a slight delay
     setTimeout(() => {
         setRandomDate();
         exploreBtn.click();
+        // Try initialize audio (might require interaction in some browsers)
+        initAudio();
     }, 500);
-};
+});
 
 randomBtn.onclick = () => {
     setRandomDate();
@@ -342,8 +354,14 @@ async function fetchSpaceData(date) {
     try {
         const response = await fetch(`https://api.nasa.gov/planetary/apod?api_key=${NASA_API_KEY}&date=${date}`);
         const data = await response.json();
-        return data.url ? data : { title: "Космічний об'єкт" };
-    } catch (e) { return { title: "Глибокий Космос" }; }
+        return data.url ? data : {
+            title: "Космічний об'єкт"
+        };
+    } catch (e) {
+        return {
+            title: "Глибокий Космос"
+        };
+    }
 }
 
 async function fetchArchivePhoto(date) {
@@ -351,19 +369,58 @@ async function fetchArchivePhoto(date) {
         const response = await fetch(`https://archive.org/advancedsearch.php?q=date:${date} AND mediatype:image&output=json&limit=1`);
         const data = await response.json();
         const item = data.response.docs[0];
-        return item ? { title: item.title, img: `https://archive.org/services/img/${item.identifier}` } : { title: "Архівна візуалізація", img: "https://images.unsplash.com/photo-1532012197267-da84d127e765?q=80&w=1000" };
+        return item ? { title: item.title, img: `https://archive.org/services/img/${item.identifier}` } : {
+            title: "Архівна візуалізація", img: "https://images.unsplash.com/photo-1532012197267-da84d127e765?q=80&w=1000"
+        };
     } catch (e) {
-        return { title: "Архівна візуалізація", img: "https://images.unsplash.com/photo-1532012197267-da84d127e765?q=80&w=1000" };
+        return {
+            title: "Архівна візуалізація", img: "https://images.unsplash.com/photo-1532012197267-da84d127e765?q=80&w=1000"
+        };
     }
 }
 
 async function fetchArchiveVideo(date) {
-    try {
-        const response = await fetch(`https://archive.org/advancedsearch.php?q=date:${date} AND mediatype:movies&output=json&limit=1`);
-        const data = await response.json();
-        const item = data.response.docs[0];
-        if (!item) return { title: "Відео-хроніка відсутня", id: null, duration: 0, url: null };
+    const year = date.split('-')[0];
+    const month = date.split('-')[1];
 
+    // Helper to perform fetch
+    const searchArchive = async (query, limit = 5) => {
+        const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(query)}&output=json&limit=${limit}`;
+        try {
+            const res = await fetch(url);
+            return await res.json();
+        } catch (e) { return { response: { docs: [] } }; }
+    };
+
+    try {
+        let items = [];
+
+        // 1. Try exact date
+        let data = await searchArchive(`date:${date} AND mediatype:movies`);
+        items = data.response.docs;
+
+        // 2. If empty, try wider search (Month of that Year)
+        if (!items || items.length === 0) {
+            console.log("No exact date video, searching month...");
+            data = await searchArchive(`year:${year} AND date:${year}-${month}* AND mediatype:movies`, 10);
+            items = data.response.docs;
+        }
+
+        // 3. If still empty, try just the Year (grab random from top 50)
+        if (!items || items.length === 0) {
+            console.log("No month video, searching year...");
+            data = await searchArchive(`year:${year} AND mediatype:movies`, 50);
+            items = data.response.docs;
+        }
+
+        if (!items || items.length === 0) {
+            return { title: "Відео-хроніка відсутня", id: null, duration: 0, url: null };
+        }
+
+        // Pick random item from results
+        const item = items[Math.floor(Math.random() * items.length)];
+
+        // Get File Metadata
         try {
             const metaRes = await fetch(`https://archive.org/metadata/${item.identifier}`);
             const metaData = await metaRes.json();
@@ -371,22 +428,27 @@ async function fetchArchiveVideo(date) {
             let videoUrl = null;
 
             if (metaData.files) {
-                const videoFile = metaData.files.find(f => f.format === 'MPEG4' || f.name.endsWith('.mp4'));
+                // Priority: h.264 > MPEG4 > Any .mp4
+                const videoFile = metaData.files.find(f => f.format === 'h.264' || f.format === 'MPEG4' || f.name.toLowerCase().endsWith('.mp4'));
+
                 if (videoFile) {
                     duration = parseFloat(videoFile.duration) || 0;
-                    videoUrl = `https://archive.org/download/${item.identifier}/${videoFile.name}`;
+                    videoUrl = `https://archive.org/download/${item.identifier}/${encodeURIComponent(videoFile.name)}`;
                 }
             }
             return { title: item.title, id: item.identifier, duration: duration || 45, url: videoUrl };
         } catch (e) {
             return { title: item.title, id: item.identifier, duration: 45, url: null };
         }
-    } catch (e) { return { title: "Відео-хроніка відсутня", id: null, duration: 0, url: null }; }
+
+    } catch (e) {
+        console.error("Archive Search Error:", e);
+        return { title: "Відео-хроніка відсутня", id: null, duration: 0, url: null };
+    }
 }
 
 function scheduleNextMemory(seconds) {
     if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
-    // Increased max limit to 3600s (1 hour) to avoid cutting off long videos
     const delay = Math.max(15, Math.min(seconds, 3600));
     autoAdvanceTimer = setTimeout(() => {
         randomBtn.click();
@@ -417,44 +479,81 @@ function renderResults(date, nasa, photo, video, news, atmosphere) {
         const v = document.createElement('video');
         v.src = video.url;
         v.autoplay = true;
-        v.muted = false;
+        v.muted = true; // Fix for autoplay policy
+        v.controls = true; // Allow user to unmute
         v.playsInline = true;
         v.crossOrigin = "anonymous";
         v.style.width = "100%";
         v.style.height = "100%";
         v.style.objectFit = "cover";
+        v.style.backgroundColor = "#000";
 
         v.onplay = () => {
             if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-            connectAudioSource(v);
-        };
-
-        v.onended = () => {
-            console.log("Video ended, advancing...");
-            randomBtn.click();
+            try { connectAudioSource(v); } catch (e) { }
         };
 
         v.onerror = () => {
-            console.warn("Video error, skipping...");
-            randomBtn.click();
+            console.warn("Video failed to play, falling back to iframe");
+            if (video.id) {
+                videoMedia.innerHTML = `<iframe id="activeIframe" src="https://archive.org/embed/${video.id}?autoplay=1&mute=1" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+            }
+        };
+
+        v.onended = () => {
+            scheduleNextMemory(5);
         };
 
         videoMedia.appendChild(v);
-        // We use a very long fallback (10 minutes) instead of the duration
-        // because we want onended to be the primary driver.
-        scheduleNextMemory(600);
     } else if (video.id) {
-        videoMedia.innerHTML = `<iframe id="activeIframe" src="https://archive.org/embed/${video.id}&autoplay=1&mute=0" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
-        // For iframes we can't detect onended, so we add a 30s buffer to the reported duration
-        scheduleNextMemory((video.duration || 60) + 30);
+        videoMedia.innerHTML = `<iframe id="activeIframe" src="https://archive.org/embed/${video.id}?autoplay=1&mute=1" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+        scheduleNextMemory(video.duration || 60);
     } else {
         videoMedia.innerHTML = `<img src="https://images.unsplash.com/photo-1485846234645-a62644f84728?q=80&w=1000">`;
-        scheduleNextMemory(20);
     }
 
     document.getElementById('videoDesc').textContent = video.title;
     document.getElementById('archiveMedia').innerHTML = `<img src="${photo.img}">`;
     document.getElementById('archiveDesc').textContent = photo.title;
+
+    // --- Space Data Integration ---
+    const spaceDesc = document.getElementById('spaceDesc');
+    const spaceContainer = document.getElementById('spaceClusterContainer');
+    const spaceCanvas = document.getElementById('spaceInteractiveCanvas');
+
+    // Ensure canvas stays on top of NASA media
+    spaceCanvas.style.position = 'relative';
+    spaceCanvas.style.zIndex = '2';
+
+    if (nasa && nasa.url) {
+        spaceDesc.textContent = `${nasa.title || "Космічний об'єкт"} | APOD NASA`;
+
+        // Cleanup old media
+        const oldNasa = spaceContainer.querySelector('.nasa-bg');
+        if (oldNasa) oldNasa.remove();
+
+        // Create new NASA background
+        const mediaTag = (nasa.media_type === 'video') ? 'iframe' : 'img';
+        const mediaEl = document.createElement(mediaTag);
+        mediaEl.className = 'nasa-bg';
+        mediaEl.src = nasa.url;
+        mediaEl.style.position = 'absolute';
+        mediaEl.style.top = '0';
+        mediaEl.style.left = '0';
+        mediaEl.style.width = '100%';
+        mediaEl.style.height = '100%';
+        mediaEl.style.objectFit = 'cover';
+        mediaEl.style.opacity = '0.5';
+        mediaEl.style.zIndex = '1';
+        mediaEl.style.border = 'none';
+        if (nasa.media_type === 'video') mediaEl.allow = "autoplay; fullscreen";
+
+        spaceContainer.prepend(mediaEl);
+    } else {
+        spaceDesc.textContent = "Спектральна пустота (дані NASA не отримано)";
+        const oldNasa = spaceContainer.querySelector('.nasa-bg');
+        if (oldNasa) oldNasa.remove();
+    }
 
     const newsArchive = document.getElementById('newsArchive');
     if (news.length > 0) {
