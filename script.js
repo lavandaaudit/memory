@@ -497,6 +497,8 @@ function renderResults(date, nasa, photo, video, news, atmosphere) {
             console.warn("Video failed to play, falling back to iframe");
             if (video.id) {
                 videoMedia.innerHTML = `<iframe id="activeIframe" src="https://archive.org/embed/${video.id}?autoplay=1&mute=1" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+                scheduleNextMemory(video.duration || 60);
+                addFullscreenButton(videoMedia);
             }
         };
 
@@ -505,9 +507,11 @@ function renderResults(date, nasa, photo, video, news, atmosphere) {
         };
 
         videoMedia.appendChild(v);
+        addFullscreenButton(videoMedia);
     } else if (video.id) {
         videoMedia.innerHTML = `<iframe id="activeIframe" src="https://archive.org/embed/${video.id}?autoplay=1&mute=1" width="100%" height="100%" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
         scheduleNextMemory(video.duration || 60);
+        addFullscreenButton(videoMedia);
     } else {
         videoMedia.innerHTML = `<img src="https://images.unsplash.com/photo-1485846234645-a62644f84728?q=80&w=1000">`;
     }
@@ -562,6 +566,36 @@ function renderResults(date, nasa, photo, video, news, atmosphere) {
         newsArchive.innerHTML = `<canvas id="newsSpaceCanvas" class="news-space-canvas"></canvas><div class="news-item" style="border:none; text-align:center; padding-top:20px; opacity:0.7;">МЕРЕЖЕВА ТИША...</div>`;
         initNewsSpaceAnimation();
     }
+}
+
+function addFullscreenButton(container) {
+    const btn = document.createElement('button');
+    btn.innerHTML = '⛶';
+    btn.title = "Fullscreen";
+    btn.style.position = 'absolute';
+    btn.style.top = '10px';
+    btn.style.left = '10px';
+    btn.style.background = 'rgba(0, 0, 0, 0.6)';
+    btn.style.color = '#00f3ff';
+    btn.style.border = '1px solid #00f3ff';
+    btn.style.padding = '5px 8px';
+    btn.style.cursor = 'pointer';
+    btn.style.zIndex = '100';
+    btn.style.fontSize = '14px';
+
+    btn.onclick = () => {
+        const elem = container.querySelector('video') || container.querySelector('iframe') || container;
+        if (elem.requestFullscreen) {
+            elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) { /* Safari */
+            elem.webkitRequestFullscreen();
+        } else if (elem.msRequestFullscreen) { /* IE11 */
+            elem.msRequestFullscreen();
+        } else if (container.requestFullscreen) {
+            container.requestFullscreen();
+        }
+    };
+    container.appendChild(btn);
 }
 
 function initNewsSpaceAnimation() {
